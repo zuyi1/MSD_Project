@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.msd_project_2026_food_diary"
+    namespace = "com.example.msd_project_2026_ZuYi"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,8 +21,8 @@ android {
     }
 
     defaultConfig {
-        // Updated as per instructions
-        applicationId = "com.example.msd_project_2026_food_diary"
+        // Updated to match google-services.json exactly
+        applicationId = "com.example.msd_project_2026_ZuYi"
 
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion

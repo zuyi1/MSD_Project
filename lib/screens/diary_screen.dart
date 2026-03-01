@@ -68,7 +68,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
                 dateTime: DateTime.now(),
               );
               await _dbService.insertDiaryEntry(entry);
-              AnalyticsService.logEvent('add_diary_entry');
+              await AnalyticsService.logEvent(name: 'add_diary_entry');
               if (mounted) {
                 Navigator.pop(context);
                 _loadEntries();
@@ -92,7 +92,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
     } catch (e) {
       // Ignore errors deleting file
     }
-    AnalyticsService.logEvent('delete_diary_entry', parameters: {'id': id});
+    await AnalyticsService.logEvent(name: 'delete_diary_entry', parameters: {'id': id});
     _loadEntries();
   }
 

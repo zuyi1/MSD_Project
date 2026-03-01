@@ -32,7 +32,7 @@ class _WaterLogScreenState extends State<WaterLogScreen> {
   Future<void> _addWater(double amount) async {
     final log = WaterLog(amount: amount, dateTime: DateTime.now());
     await _dbService.insertWaterLog(log);
-    AnalyticsService.logEvent('add_water_log', parameters: {'amount': amount});
+    await AnalyticsService.logEvent(name: 'add_water_log', parameters: {'amount': amount});
     _loadLogs();
   }
 

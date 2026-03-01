@@ -26,7 +26,8 @@ class _MainScreenState extends State<MainScreen> {
     setState(() {
       _selectedIndex = index;
     });
-    AnalyticsService.logEvent('nav_tab_click', parameters: {'index': index});
+    // Corrected to use named parameter 'name'
+    AnalyticsService.logEvent(name: 'nav_tab_click', parameters: {'index': index});
   }
 
   @override
@@ -58,6 +59,7 @@ class _MainScreenState extends State<MainScreen> {
         selectedItemColor: Colors.amber[800],
         unselectedItemColor: Colors.grey,
         onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed,
       ),
     );
   }
