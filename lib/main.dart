@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'screens/main_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,16 +23,16 @@ class FoodDiaryApp extends StatelessWidget {
         brightness: Brightness.light,
         scaffoldBackgroundColor: Colors.white,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6A5AE0),
+          seedColor: const Color(0xFF4CAF50), // Changed to Green
           brightness: Brightness.light,
-          primary: const Color(0xFF6A5AE0),
-          secondary: const Color(0xFF3E5444),
+          primary: const Color(0xFF4CAF50), // Green Primary
+          secondary: const Color(0xFF8BC34A), // Light Green Secondary
           surface: Colors.white,
         ),
         useMaterial3: true,
         fontFamily: 'Georgia',
       ),
-      home: const MainScreen(),
+      home: const LoginScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

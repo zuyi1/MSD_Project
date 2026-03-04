@@ -4,6 +4,7 @@ import '../models/diary_entry.dart';
 import '../models/user_profile.dart';
 import '../models/water_log.dart';
 import '../models/food_item.dart';
+import '../models/user.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -11,6 +12,10 @@ class DatabaseService {
   DatabaseService._internal();
 
   static Database? _database;
+  static int? _currentUserId;
+
+  static void setUserId(int id) => _currentUserId = id;
+  static int? get currentUserId => _currentUserId;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -22,7 +27,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'food_diary.db');
     return await openDatabase(
       path,
-      version: 2, // Incremented version to add description field
+      version: 4, // Incremented to add users and link data
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -31,24 +36,63 @@ class DatabaseService {
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE food_items ADD COLUMN description TEXT');
-      // Update existing items or re-populate
       await db.delete('food_items');
-      _insertInitialFood(db);
+      await _insertInitialFood(db);
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE bmi_history(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          weight REAL,
+          height REAL,
+          bmi REAL,
+          dateTime TEXT
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE users(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT UNIQUE,
+          password TEXT
+        )
+      ''');
+      // Link existing tables to a default user or handle migration
+      // For simplicity in this lab project, we'll just add the column
+      try {
+        await db.execute('ALTER TABLE diary_entries ADD COLUMN userId INTEGER DEFAULT 1');
+        await db.execute('ALTER TABLE water_logs ADD COLUMN userId INTEGER DEFAULT 1');
+        await db.execute('ALTER TABLE bmi_history ADD COLUMN userId INTEGER DEFAULT 1');
+        await db.execute('ALTER TABLE user_profile ADD COLUMN userId INTEGER DEFAULT 1');
+      } catch (e) {
+        // Column might already exist
+      }
     }
   }
 
   Future _onCreate(Database db, int version) async {
     await db.execute('''
+      CREATE TABLE users(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT
+      )
+    ''');
+    await db.execute('''
       CREATE TABLE diary_entries(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER,
         imagePath TEXT,
         comment TEXT,
-        dateTime TEXT
+        dateTime TEXT,
+        calories REAL DEFAULT 0.0
       )
     ''');
     await db.execute('''
       CREATE TABLE user_profile(
-        id INTEGER PRIMARY KEY CHECK (id = 0),
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER UNIQUE,
         name TEXT,
         age INTEGER,
         weight REAL,
@@ -58,6 +102,7 @@ class DatabaseService {
     await db.execute('''
       CREATE TABLE water_logs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER,
         amount REAL,
         dateTime TEXT
       )
@@ -77,6 +122,16 @@ class DatabaseService {
         description TEXT,
         ingredients TEXT,
         steps TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE bmi_history(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER,
+        weight REAL,
+        height REAL,
+        bmi REAL,
+        dateTime TEXT
       )
     ''');
 
@@ -122,45 +177,98 @@ class DatabaseService {
     }
   }
 
+  // Auth operations
+  Future<int> register(String username, String password) async {
+    Database db = await database;
+    return await db.insert('users', {'username': username, 'password': password});
+  }
+
+  Future<User?> login(String username, String password) async {
+    Database db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'users',
+      where: 'username = ? AND password = ?',
+      whereArgs: [username, password],
+    );
+    if (maps.isEmpty) return null;
+    return User.fromMap(maps[0]);
+  }
+
   // Diary Entry operations
   Future<int> insertDiaryEntry(DiaryEntry entry) async {
     Database db = await database;
-    return await db.insert('diary_entries', entry.toMap());
+    return await db.insert('diary_entries', {
+      ...entry.toMap(),
+      'userId': _currentUserId,
+    });
   }
 
   Future<List<DiaryEntry>> getDiaryEntries() async {
     Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('diary_entries', orderBy: 'dateTime DESC');
+    final List<Map<String, dynamic>> maps = await db.query(
+      'diary_entries',
+      where: 'userId = ?',
+      whereArgs: [_currentUserId],
+      orderBy: 'dateTime DESC',
+    );
     return List.generate(maps.length, (i) => DiaryEntry.fromMap(maps[i]));
   }
 
   Future<int> deleteDiaryEntry(int id) async {
     Database db = await database;
-    return await db.delete('diary_entries', where: 'id = ?', whereArgs: [id]);
+    return await db.delete('diary_entries', where: 'id = ? AND userId = ?', whereArgs: [id, _currentUserId]);
   }
 
   // User Profile operations
   Future<int> saveUserProfile(UserProfile profile) async {
     Database db = await database;
-    return await db.insert('user_profile', {'id': 0, ...profile.toMap()}, conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert('user_profile', {
+      'userId': _currentUserId,
+      ...profile.toMap()
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<UserProfile?> getUserProfile() async {
     Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('user_profile', where: 'id = 0');
+    final List<Map<String, dynamic>> maps = await db.query('user_profile', where: 'userId = ?', whereArgs: [_currentUserId]);
     if (maps.isEmpty) return null;
     return UserProfile.fromMap(maps[0]);
+  }
+
+  // BMI History operations
+  Future<int> insertBMIHistory(double weight, double height, double bmi) async {
+    Database db = await database;
+    return await db.insert('bmi_history', {
+      'userId': _currentUserId,
+      'weight': weight,
+      'height': height,
+      'bmi': bmi,
+      'dateTime': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getBMIHistory() async {
+    Database db = await database;
+    return await db.query('bmi_history', where: 'userId = ?', whereArgs: [_currentUserId], orderBy: 'dateTime DESC');
   }
 
   // Water Log operations
   Future<int> insertWaterLog(WaterLog log) async {
     Database db = await database;
-    return await db.insert('water_logs', log.toMap());
+    return await db.insert('water_logs', {
+      ...log.toMap(),
+      'userId': _currentUserId,
+    });
   }
 
   Future<List<WaterLog>> getWaterLogs() async {
     Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('water_logs', orderBy: 'dateTime DESC');
+    final List<Map<String, dynamic>> maps = await db.query(
+      'water_logs',
+      where: 'userId = ?',
+      whereArgs: [_currentUserId],
+      orderBy: 'dateTime DESC',
+    );
     return List.generate(maps.length, (i) => WaterLog.fromMap(maps[i]));
   }
 

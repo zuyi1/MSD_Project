@@ -43,7 +43,7 @@ class _MainScreenState extends State<MainScreen> {
         height: 85,
         margin: const EdgeInsets.fromLTRB(20, 0, 20, 25),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9), // Light background with transparency
+          color: Colors.white.withOpacity(0.9),
           borderRadius: BorderRadius.circular(35),
           border: Border.all(color: Colors.black.withOpacity(0.05), width: 1),
           boxShadow: [
@@ -83,7 +83,7 @@ class _MainScreenState extends State<MainScreen> {
             duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF6A5AE0) : Colors.transparent,
+              color: isSelected ? const Color(0xFF4CAF50) : Colors.transparent,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -97,7 +97,7 @@ class _MainScreenState extends State<MainScreen> {
             Text(
               label,
               style: const TextStyle(
-                color: Color(0xFF6A5AE0),
+                color: Color(0xFF4CAF50),
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),

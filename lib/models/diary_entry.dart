@@ -3,8 +3,15 @@ class DiaryEntry {
   final String imagePath;
   final String comment;
   final DateTime dateTime;
+  final double calories;
 
-  DiaryEntry({this.id, required this.imagePath, required this.comment, required this.dateTime});
+  DiaryEntry({
+    this.id, 
+    required this.imagePath, 
+    required this.comment, 
+    required this.dateTime,
+    this.calories = 0.0,
+  });
 
   Map<String, dynamic> toMap() {
     return {
@@ -12,6 +19,7 @@ class DiaryEntry {
       'imagePath': imagePath,
       'comment': comment,
       'dateTime': dateTime.toIso8601String(),
+      'calories': calories,
     };
   }
 
@@ -21,6 +29,7 @@ class DiaryEntry {
       imagePath: map['imagePath'],
       comment: map['comment'],
       dateTime: DateTime.parse(map['dateTime']),
+      calories: (map['calories'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
