@@ -22,9 +22,19 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'food_diary.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Incremented version to add description field
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE food_items ADD COLUMN description TEXT');
+      // Update existing items or re-populate
+      await db.delete('food_items');
+      _insertInitialFood(db);
+    }
   }
 
   Future _onCreate(Database db, int version) async {
@@ -56,26 +66,59 @@ class DatabaseService {
       CREATE TABLE food_items(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
-        calories REAL
+        calories REAL,
+        description TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE recipes(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        description TEXT,
+        ingredients TEXT,
+        steps TEXT
       )
     ''');
 
-    // Pre-populate food items
+    await _insertInitialFood(db);
+    await _insertInitialRecipes(db);
+  }
+
+  Future _insertInitialFood(Database db) async {
     List<FoodItem> initialFood = [
-      FoodItem(name: 'Apple', calories: 95),
-      FoodItem(name: 'Banana', calories: 105),
-      FoodItem(name: 'Chicken Breast (100g)', calories: 165),
-      FoodItem(name: 'Rice (1 cup)', calories: 205),
-      FoodItem(name: 'Egg', calories: 78),
-      FoodItem(name: 'Broccoli (1 cup)', calories: 31),
-      FoodItem(name: 'Salmon (100g)', calories: 208),
-      FoodItem(name: 'Almonds (28g)', calories: 164),
-      FoodItem(name: 'Greek Yogurt (170g)', calories: 100),
-      FoodItem(name: 'Oatmeal (1 cup)', calories: 158),
+      FoodItem(name: 'Chicken Salad', calories: 350, description: 'Fresh chicken with Avocado and greens.'),
+      FoodItem(name: 'Mixed Salad', calories: 200, description: 'Assorted seasonal vegetables with vinaigrette.'),
+      FoodItem(name: 'Quinoa Salad', calories: 280, description: 'Protein-rich quinoa with spicy garlic dressing.'),
+      FoodItem(name: 'Apple', calories: 95, description: 'Crisp and sweet organic apple.'),
+      FoodItem(name: 'Banana', calories: 105, description: 'Energy-boosting potassium-rich fruit.'),
+      FoodItem(name: 'Grilled Salmon', calories: 400, description: 'Omega-3 rich Atlantic salmon grilled to perfection.'),
+      FoodItem(name: 'Broccoli', calories: 31, description: 'Steamed green florets, high in fiber.'),
+      FoodItem(name: 'Greek Yogurt', calories: 100, description: 'Creamy yogurt with active cultures.'),
+      FoodItem(name: 'Almonds', calories: 164, description: 'Handful of raw, unsalted energy nuts.'),
+      FoodItem(name: 'Brown Rice', calories: 216, description: 'Whole grain goodness for lasting energy.'),
     ];
 
     for (var food in initialFood) {
       await db.insert('food_items', food.toMap());
+    }
+  }
+
+  Future _insertInitialRecipes(Database db) async {
+     final List<Map<String, dynamic>> initialRecipes = [
+      {'title': 'Avocado Toast', 'description': 'Healthy morning toast', 'ingredients': 'Avocado, Whole grain bread, Salt', 'steps': 'Toast bread, mash avocado on top.'},
+      {'title': 'Quinoa Salad', 'description': 'Refreshing lunch', 'ingredients': 'Quinoa, Cucumber, Tomato, Feta', 'steps': 'Cook quinoa, mix with chopped veggies.'},
+      {'title': 'Baked Salmon', 'description': 'Rich in Omega-3', 'ingredients': 'Salmon, Lemon, Garlic', 'steps': 'Season salmon, bake at 200C for 15 mins.'},
+      {'title': 'Greek Yogurt Bowl', 'description': 'Protein-packed snack', 'ingredients': 'Yogurt, Berries, Honey', 'steps': 'Top yogurt with fresh berries.'},
+      {'title': 'Chicken Stir-fry', 'description': 'Quick healthy dinner', 'ingredients': 'Chicken, Bell peppers, Soy sauce', 'steps': 'Sauté chicken and peppers in wok.'},
+      {'title': 'Smoothie Bowl', 'description': 'Fruity goodness', 'ingredients': 'Banana, Spinach, Almond milk', 'steps': 'Blend and top with seeds.'},
+      {'title': 'Lentil Soup', 'description': 'Hearty and warm', 'ingredients': 'Lentils, Carrots, Onion', 'steps': 'Simmer lentils with veggies until soft.'},
+      {'title': 'Grilled Veggies', 'description': 'Simple side dish', 'ingredients': 'Zucchini, Eggplant, Olive oil', 'steps': 'Grill sliced veggies with oil.'},
+      {'title': 'Egg White Omelet', 'description': 'Low calorie breakfast', 'ingredients': 'Egg whites, Spinach, Mushrooms', 'steps': 'Cook in non-stick pan.'},
+      {'title': 'Berry Chia Pudding', 'description': 'Make ahead breakfast', 'ingredients': 'Chia seeds, Coconut milk, Berries', 'steps': 'Soak seeds overnight, top with berries.'},
+    ];
+
+    for (var recipe in initialRecipes) {
+      await db.insert('recipes', recipe);
     }
   }
 
@@ -126,5 +169,11 @@ class DatabaseService {
     Database db = await database;
     final List<Map<String, dynamic>> maps = await db.query('food_items');
     return List.generate(maps.length, (i) => FoodItem.fromMap(maps[i]));
+  }
+
+  // Recipe operations
+  Future<List<Map<String, dynamic>>> getRecipes() async {
+    Database db = await database;
+    return await db.query('recipes');
   }
 }
