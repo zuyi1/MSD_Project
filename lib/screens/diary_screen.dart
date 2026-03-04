@@ -19,6 +19,8 @@ class _DiaryScreenState extends State<DiaryScreen> {
   final DatabaseService _dbService = DatabaseService();
   final ImagePicker _picker = ImagePicker();
   List<DiaryEntry> _entries = [];
+  DateTime _selectedDate = DateTime.now();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -28,82 +30,124 @@ class _DiaryScreenState extends State<DiaryScreen> {
   }
 
   Future<void> _loadEntries() async {
-    final entries = await _dbService.getDiaryEntries();
-    setState(() {
-      _entries = entries;
-    });
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final entries = await _dbService.getDiaryEntries();
+      if (mounted) {
+        setState(() {
+          _entries = entries;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading entries: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<void> _addEntry() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
-    if (image == null) return;
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
+      
+      if (image == null) return;
 
-    final directory = await getApplicationDocumentsDirectory();
-    final fileName = p.basename(image.path);
-    final savedImage = await File(image.path).copy('${directory.path}/$fileName');
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName = 'img_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final savedImagePath = p.join(directory.path, fileName);
+      
+      await File(image.path).copy(savedImagePath);
 
-    final commentController = TextEditingController();
+      if (!mounted) return;
+      
+      final commentController = TextEditingController();
 
-    if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Diary Entry'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.file(File(savedImage.path), height: 150, width: double.infinity, fit: BoxFit.cover),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('New Journal Entry', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2D2E42))),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: SizedBox(
+                    height: 200,
+                    width: double.infinity,
+                    child: Image.file(
+                      File(savedImagePath), 
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: commentController,
+                  decoration: InputDecoration(
+                    hintText: "What's the meal?",
+                    hintStyle: TextStyle(color: Colors.grey[400]),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 15),
-            TextField(
-              controller: commentController,
-              decoration: InputDecoration(
-                hintText: "How was your meal?",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                filled: true,
-                fillColor: Colors.grey[100],
+          ),
+          actionsPadding: const EdgeInsets.only(bottom: 16, right: 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6A5AE0),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               ),
-              maxLines: 3,
+              onPressed: () async {
+                final now = DateTime.now();
+                final entryDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, now.hour, now.minute);
+                final entry = DiaryEntry(imagePath: savedImagePath, comment: commentController.text, dateTime: entryDate);
+                await _dbService.insertDiaryEntry(entry);
+                await AnalyticsService.logEvent(name: 'add_diary_entry');
+                if (mounted) {
+                  Navigator.pop(context);
+                  _loadEntries();
+                }
+              },
+              child: const Text('Save Entry', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            onPressed: () async {
-              final entry = DiaryEntry(
-                imagePath: savedImage.path,
-                comment: commentController.text,
-                dateTime: DateTime.now(),
-              );
-              await _dbService.insertDiaryEntry(entry);
-              await AnalyticsService.logEvent(name: 'add_diary_entry');
-              if (mounted) {
-                Navigator.pop(context);
-                _loadEntries();
-              }
-            },
-            child: const Text('Save Entry'),
-          ),
-        ],
-      ),
-    );
+      );
+    } catch (e) {
+      debugPrint("Error adding entry: $e");
+    }
   }
 
   Future<void> _deleteEntry(int id, String imagePath) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Delete Entry?'),
-        content: const Text('Are you sure you want to remove this memory?'),
+        content: const Text('Remove this entry permanently?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.redAccent))),
         ],
       ),
     );
@@ -121,101 +165,118 @@ class _DiaryScreenState extends State<DiaryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dailyEntries = _entries.where((e) => 
+      e.dateTime.year == _selectedDate.year && 
+      e.dateTime.month == _selectedDate.month && 
+      e.dateTime.day == _selectedDate.day).toList();
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('My Food Diary', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
         elevation: 0,
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black,
+        centerTitle: false,
+        title: Text(
+          DateFormat('d MMMM').format(_selectedDate),
+          style: const TextStyle(color: Color(0xFF2D2E42), fontSize: 28, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF2D2E42), size: 18),
+            onPressed: () => setState(() => _selectedDate = _selectedDate.subtract(const Duration(days: 1))),
+          ),
+          IconButton(
+            icon: const Icon(Icons.arrow_forward_ios, color: Color(0xFF2D2E42), size: 18),
+            onPressed: () => setState(() => _selectedDate = _selectedDate.add(const Duration(days: 1))),
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
-      body: _entries.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.no_photography_outlined, size: 80, color: Colors.grey[300]),
-                  const SizedBox(height: 10),
-                  Text('No delicious memories yet!', style: TextStyle(color: Colors.grey[500], fontSize: 16)),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: _entries.length,
-              itemBuilder: (context, index) {
-                final entry = _entries[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Stack(
-                          children: [
-                            Image.file(
-                              File(entry.imagePath),
-                              height: 220,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const SizedBox(height: 220, child: Center(child: Icon(Icons.broken_image, size: 50))),
-                            ),
-                            Positioned(
-                              top: 10,
-                              right: 10,
-                              child: Container(
-                                decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
-                                child: IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                                  onPressed: () => _deleteEntry(entry.id!, entry.imagePath),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    DateFormat('EEEE, MMM d • h:mm a').format(entry.dateTime),
-                                    style: TextStyle(color: Colors.grey[600], fontSize: 12, fontWeight: FontWeight.w500),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                entry.comment.isEmpty ? 'No comment' : entry.comment,
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+      body: Stack(
+        children: [
+          _isLoading 
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF6A5AE0)))
+              : dailyEntries.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120), // Bottom padding for FAB and Nav
+                      itemCount: dailyEntries.length,
+                      itemBuilder: (context, index) => _buildEntryCard(dailyEntries[index]),
                     ),
-                  ),
-                );
-              },
+          Positioned(
+            right: 20,
+            bottom: 120, // Positioned above the nav bar overlay
+            child: FloatingActionButton(
+              onPressed: _addEntry,
+              backgroundColor: const Color(0xFF3E5444),
+              elevation: 6,
+              child: const Icon(Icons.camera_alt, color: Colors.white),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addEntry,
-        label: const Text('Capture Meal'),
-        icon: const Icon(Icons.camera_alt),
-        backgroundColor: Colors.green,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.auto_stories, size: 80, color: Colors.grey[200]),
+          const SizedBox(height: 16),
+          const Text('Journal is empty', style: TextStyle(color: Colors.grey, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEntryCard(DiaryEntry entry) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: SizedBox(
+                  height: 240,
+                  width: double.infinity,
+                  child: Image.file(
+                    File(entry.imagePath),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[100], child: const Icon(Icons.broken_image)),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: GestureDetector(
+                  onTap: () => _deleteEntry(entry.id!, entry.imagePath),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
+                    child: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                entry.comment.isEmpty ? 'Meal' : entry.comment,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D2E42)),
+              ),
+              Text(DateFormat('h:mm a').format(entry.dateTime), style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+            ],
+          ),
+        ],
       ),
     );
   }
