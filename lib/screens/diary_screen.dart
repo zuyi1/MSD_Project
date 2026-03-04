@@ -66,6 +66,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
       if (!mounted) return;
       
       final commentController = TextEditingController();
+      final calorieController = TextEditingController(text: '350'); // Default calories
 
       showDialog(
         context: context,
@@ -101,6 +102,18 @@ class _DiaryScreenState extends State<DiaryScreen> {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                 ),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: calorieController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: "Estimated Calories (kcal)",
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
               ],
             ),
           ),
@@ -112,16 +125,25 @@ class _DiaryScreenState extends State<DiaryScreen> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6A5AE0),
+                backgroundColor: const Color(0xFF4CAF50),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               ),
               onPressed: () async {
                 final now = DateTime.now();
                 final entryDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, now.hour, now.minute);
-                final entry = DiaryEntry(imagePath: savedImagePath, comment: commentController.text, dateTime: entryDate);
+                final calories = double.tryParse(calorieController.text) ?? 0.0;
+
+                final entry = DiaryEntry(
+                  imagePath: savedImagePath, 
+                  comment: commentController.text, 
+                  dateTime: entryDate,
+                  calories: calories,
+                );
+                
                 await _dbService.insertDiaryEntry(entry);
                 await AnalyticsService.logEvent(name: 'add_diary_entry');
+                
                 if (mounted) {
                   Navigator.pop(context);
                   _loadEntries();
@@ -195,20 +217,20 @@ class _DiaryScreenState extends State<DiaryScreen> {
       body: Stack(
         children: [
           _isLoading 
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFF6A5AE0)))
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)))
               : dailyEntries.isEmpty
                   ? _buildEmptyState()
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120), // Bottom padding for FAB and Nav
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
                       itemCount: dailyEntries.length,
                       itemBuilder: (context, index) => _buildEntryCard(dailyEntries[index]),
                     ),
           Positioned(
             right: 20,
-            bottom: 120, // Positioned above the nav bar overlay
+            bottom: 120,
             child: FloatingActionButton(
               onPressed: _addEntry,
-              backgroundColor: const Color(0xFF3E5444),
+              backgroundColor: const Color(0xFF4CAF50),
               elevation: 6,
               child: const Icon(Icons.camera_alt, color: Colors.white),
             ),
@@ -269,9 +291,19 @@ class _DiaryScreenState extends State<DiaryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                entry.comment.isEmpty ? 'Meal' : entry.comment,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D2E42)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.comment.isEmpty ? 'Meal' : entry.comment,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D2E42)),
+                  ),
+                  if (entry.calories > 0)
+                    Text(
+                      '${entry.calories.toStringAsFixed(0)} kcal',
+                      style: const TextStyle(color: Color(0xFF4CAF50), fontWeight: FontWeight.bold),
+                    ),
+                ],
               ),
               Text(DateFormat('h:mm a').format(entry.dateTime), style: TextStyle(color: Colors.grey[600], fontSize: 14)),
             ],

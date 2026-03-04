@@ -67,13 +67,13 @@ class _WaterLogScreenState extends State<WaterLogScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Center(
           child: Text('🎉 Good Job!', 
-            style: TextStyle(color: Color(0xFF6A5AE0), fontWeight: FontWeight.bold, fontSize: 24)
+            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 24)
           ),
         ),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.stars, color: Color(0xFFEFFF5E), size: 80),
+            Icon(Icons.stars, color: Colors.blue, size: 80),
             SizedBox(height: 16),
             Text('You have reached your daily hydration goal. Stay healthy!', 
               textAlign: TextAlign.center,
@@ -85,7 +85,7 @@ class _WaterLogScreenState extends State<WaterLogScreen> {
           Center(
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6A5AE0),
+                backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               ),
@@ -131,7 +131,7 @@ class _WaterLogScreenState extends State<WaterLogScreen> {
                         strokeWidth: 15,
                         strokeCap: StrokeCap.round,
                         backgroundColor: const Color(0xFFF8F9FE),
-                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6A5AE0)),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
                       ),
                     );
                   },
@@ -139,7 +139,7 @@ class _WaterLogScreenState extends State<WaterLogScreen> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.water_drop, size: 40, color: Color(0xFF6A5AE0)),
+                    const Icon(Icons.water_drop, size: 40, color: Colors.blue),
                     Text('${todayTotal.toStringAsFixed(0)}',
                         style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Color(0xFF2D2E42))),
                     Text('of ${_dailyGoal.toStringAsFixed(0)} ml',
@@ -193,8 +193,8 @@ class _WaterLogScreenState extends State<WaterLogScreen> {
                               ),
                               child: ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: const Color(0xFF6A5AE0).withOpacity(0.1),
-                                  child: const Icon(Icons.water_drop, color: Color(0xFF6A5AE0), size: 18),
+                                  backgroundColor: Colors.blue.withOpacity(0.1),
+                                  child: const Icon(Icons.water_drop, color: Colors.blue, size: 18),
                                 ),
                                 title: Text('${log.amount.toStringAsFixed(0)} ml',
                                     style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2D2E42))),
@@ -228,7 +228,7 @@ class _WaterLogScreenState extends State<WaterLogScreen> {
                 BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 6)),
               ],
             ),
-            child: Icon(icon, color: const Color(0xFF6A5AE0), size: 28),
+            child: Icon(icon, color: Colors.blue, size: 28),
           ),
         ),
         const SizedBox(height: 10),

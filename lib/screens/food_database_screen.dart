@@ -27,10 +27,12 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
   Future<void> _loadData() async {
     final items = await _dbService.getFoodItems();
     final entries = await _dbService.getDiaryEntries();
-    setState(() {
-      _foodItems = items;
-      _diaryEntries = entries;
-    });
+    if (mounted) {
+      setState(() {
+        _foodItems = items;
+        _diaryEntries = entries;
+      });
+    }
   }
 
   double _calculateTodayCalories() {
@@ -38,6 +40,89 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
     return _diaryEntries
         .where((e) => e.dateTime.year == now.year && e.dateTime.month == now.month && e.dateTime.day == now.day)
         .fold(0.0, (sum, item) => sum + item.calories);
+  }
+
+  Future<void> _addFoodToTracker(String name, double calories) async {
+    final entry = DiaryEntry(
+      imagePath: '', // No image for manual logging
+      comment: 'Logged: $name',
+      dateTime: DateTime.now(),
+      calories: calories,
+    );
+
+    await _dbService.insertDiaryEntry(entry);
+    await AnalyticsService.logEvent(name: 'log_food_item', parameters: {'food_name': name, 'calories': calories});
+    
+    await _loadData(); // Refresh tracker
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Logged $name (+${calories.toStringAsFixed(0)} kcal)'),
+          backgroundColor: const Color(0xFF4CAF50),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  void _showCustomCalorieDialog() {
+    final nameController = TextEditingController();
+    final calorieController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Add Custom Meal', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2D2E42))),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(
+                hintText: "Meal name (e.g. 2 Boiled Eggs)",
+                filled: true,
+                fillColor: Colors.grey[100],
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: calorieController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                hintText: "Calories (kcal)",
+                filled: true,
+                fillColor: Colors.grey[100],
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+            onPressed: () {
+              final name = nameController.text;
+              final calories = double.tryParse(calorieController.text) ?? 0.0;
+              if (name.isNotEmpty && calories > 0) {
+                Navigator.pop(context);
+                _addFoodToTracker(name, calories);
+              }
+            },
+            child: const Text('Add Meal'),
+          ),
+        ],
+      ),
+    );
   }
 
   String _getImageForFood(String name) {
@@ -92,17 +177,38 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
             const SizedBox(height: 12),
             Text(item.description, style: TextStyle(fontSize: 16, color: Colors.grey[600], height: 1.5)),
             const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                      child: const Text('Close', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
                 ),
-                child: const Text('Close', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _addFoodToTracker(item.name, item.calories);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4CAF50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                      child: const Text('Add to Daily', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -122,6 +228,13 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
         elevation: 0,
         centerTitle: true,
         title: const Text('Nutrition & Food', style: TextStyle(color: Color(0xFF2D2E42), fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF4CAF50), size: 28),
+            onPressed: _showCustomCalorieDialog,
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -174,7 +287,7 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
             const SizedBox(height: 32),
             const Text('Food Database', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2D2E42))),
             const SizedBox(height: 4),
-            Text('Explore healthy food options', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+            Text('Tap the + to add to your daily tracker', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
             const SizedBox(height: 24),
             // Featured Main Card
             if (_foodItems.isNotEmpty) _buildMainFoodCard(_foodItems[0]),
@@ -225,7 +338,7 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(item.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D2E42))),
-                  Text('View Details', style: TextStyle(fontSize: 13, color: Colors.grey[400])),
+                  Text('Tap for info', style: TextStyle(fontSize: 13, color: Colors.grey[400])),
                   const SizedBox(height: 12),
                   Text('${item.calories.toStringAsFixed(0)} kcal', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF4CAF50))),
                 ],
@@ -233,10 +346,15 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
             ),
             Positioned(
               right: 20, top: 75,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(color: Color(0xFF2D2E42), shape: BoxShape.circle),
-                child: const Icon(Icons.keyboard_arrow_right, color: Colors.white, size: 20),
+              child: InkWell(
+                onTap: () {
+                  _addFoodToTracker(item.name, item.calories);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle),
+                  child: const Icon(Icons.add, color: Colors.white, size: 24),
+                ),
               ),
             ),
           ],
@@ -266,10 +384,15 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
             const SizedBox(height: 4),
             Text('${item.calories.toStringAsFixed(0)} kcal', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF4CAF50))),
             const Spacer(),
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(color: Color(0xFF2D2E42), shape: BoxShape.circle),
-              child: const Icon(Icons.keyboard_arrow_right, color: Colors.white, size: 16),
+            InkWell(
+              onTap: () {
+                _addFoodToTracker(item.name, item.calories);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle),
+                child: const Icon(Icons.add, color: Colors.white, size: 20),
+              ),
             ),
           ],
         ),

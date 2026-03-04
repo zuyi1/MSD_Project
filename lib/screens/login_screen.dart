@@ -18,33 +18,51 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   Future<void> _login() async {
-    setState(() => _isLoading = true);
-    final user = await _dbService.login(
-      _usernameController.text,
-      _passwordController.text,
-    );
-    setState(() => _isLoading = false);
+    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter username and password')),
+      );
+      return;
+    }
 
-    if (user != null) {
-      DatabaseService.setUserId(user.id!);
-      await AnalyticsService.logEvent(name: 'login_success');
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-        );
+    setState(() => _isLoading = true);
+    try {
+      final user = await _dbService.login(
+        _usernameController.text,
+        _passwordController.text,
+      );
+      
+      if (user != null) {
+        DatabaseService.setUserId(user.id!);
+        await AnalyticsService.logEvent(name: 'login_success');
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid username or password')),
+          );
+        }
       }
-    } else {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid username or password')),
+          SnackBar(content: Text('Login error: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    const greenColor = Color(0xFF4CAF50);
+    
     return Scaffold(
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
@@ -69,9 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(fontSize: 16, color: Colors.grey[500]),
               ),
               const SizedBox(height: 60),
-              _buildTextField('Username', _usernameController, Icons.person_outline),
+              _buildTextField('Username', _usernameController, Icons.person_outline, greenColor),
               const SizedBox(height: 20),
-              _buildTextField('Password', _passwordController, Icons.lock_outline, isPassword: true),
+              _buildTextField('Password', _passwordController, Icons.lock_outline, greenColor, isPassword: true),
               const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
@@ -79,14 +97,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _login,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6A5AE0),
+                    backgroundColor: greenColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     elevation: 5,
-                    shadowColor: const Color(0xFF6A5AE0).withOpacity(0.4),
+                    shadowColor: greenColor.withOpacity(0.4),
                   ),
                   child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
                       : const Text('Sign In', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -103,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: const Text(
                       'Register',
                       style: TextStyle(
-                        color: Color(0xFF6A5AE0),
+                        color: greenColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -117,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, IconData icon, {bool isPassword = false}) {
+  Widget _buildTextField(String label, TextEditingController controller, IconData icon, Color accentColor, {bool isPassword = false}) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FE),
@@ -127,8 +149,9 @@ class _LoginScreenState extends State<LoginScreen> {
       child: TextField(
         controller: controller,
         obscureText: isPassword,
+        cursorColor: accentColor,
         decoration: InputDecoration(
-          icon: Icon(icon, color: const Color(0xFF6A5AE0)),
+          icon: Icon(icon, color: accentColor),
           border: InputBorder.none,
           labelText: label,
           labelStyle: const TextStyle(color: Colors.grey),

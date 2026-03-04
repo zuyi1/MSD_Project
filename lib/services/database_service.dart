@@ -27,7 +27,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'food_diary.db');
     return await openDatabase(
       path,
-      version: 4, // Incremented to add users and link data
+      version: 7, // Bumped to 7 to ensure 'calories' column exists
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -36,12 +36,10 @@ class DatabaseService {
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE food_items ADD COLUMN description TEXT');
-      await db.delete('food_items');
-      await _insertInitialFood(db);
     }
     if (oldVersion < 3) {
       await db.execute('''
-        CREATE TABLE bmi_history(
+        CREATE TABLE IF NOT EXISTS bmi_history(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           weight REAL,
           height REAL,
@@ -52,19 +50,36 @@ class DatabaseService {
     }
     if (oldVersion < 4) {
       await db.execute('''
-        CREATE TABLE users(
+        CREATE TABLE IF NOT EXISTS users(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           username TEXT UNIQUE,
           password TEXT
         )
       ''');
-      // Link existing tables to a default user or handle migration
-      // For simplicity in this lab project, we'll just add the column
+      var tables = ['diary_entries', 'water_logs', 'bmi_history', 'user_profile'];
+      for (var table in tables) {
+        try {
+          await db.execute('ALTER TABLE $table ADD COLUMN userId INTEGER DEFAULT 1');
+        } catch (e) {}
+      }
+    }
+    if (oldVersion < 6) {
+      await db.execute('DROP TABLE IF EXISTS user_profile');
+      await db.execute('''
+        CREATE TABLE user_profile(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          userId INTEGER UNIQUE,
+          name TEXT,
+          age INTEGER,
+          weight REAL,
+          height REAL
+        )
+      ''');
+    }
+    if (oldVersion < 7) {
+      // Add 'calories' column if it was missed in previous migrations
       try {
-        await db.execute('ALTER TABLE diary_entries ADD COLUMN userId INTEGER DEFAULT 1');
-        await db.execute('ALTER TABLE water_logs ADD COLUMN userId INTEGER DEFAULT 1');
-        await db.execute('ALTER TABLE bmi_history ADD COLUMN userId INTEGER DEFAULT 1');
-        await db.execute('ALTER TABLE user_profile ADD COLUMN userId INTEGER DEFAULT 1');
+        await db.execute('ALTER TABLE diary_entries ADD COLUMN calories REAL DEFAULT 0.0');
       } catch (e) {
         // Column might already exist
       }
@@ -152,9 +167,8 @@ class DatabaseService {
       FoodItem(name: 'Almonds', calories: 164, description: 'Handful of raw, unsalted energy nuts.'),
       FoodItem(name: 'Brown Rice', calories: 216, description: 'Whole grain goodness for lasting energy.'),
     ];
-
     for (var food in initialFood) {
-      await db.insert('food_items', food.toMap());
+      await db.insert('food_items', food.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
 
@@ -171,9 +185,8 @@ class DatabaseService {
       {'title': 'Egg White Omelet', 'description': 'Low calorie breakfast', 'ingredients': 'Egg whites, Spinach, Mushrooms', 'steps': 'Cook in non-stick pan.'},
       {'title': 'Berry Chia Pudding', 'description': 'Make ahead breakfast', 'ingredients': 'Chia seeds, Coconut milk, Berries', 'steps': 'Soak seeds overnight, top with berries.'},
     ];
-
     for (var recipe in initialRecipes) {
-      await db.insert('recipes', recipe);
+      await db.insert('recipes', recipe, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
 
@@ -249,7 +262,8 @@ class DatabaseService {
 
   Future<List<Map<String, dynamic>>> getBMIHistory() async {
     Database db = await database;
-    return await db.query('bmi_history', where: 'userId = ?', whereArgs: [_currentUserId], orderBy: 'dateTime DESC');
+    final List<Map<String, dynamic>> maps = await db.query('bmi_history', where: 'userId = ?', whereArgs: [_currentUserId], orderBy: 'dateTime DESC');
+    return maps;
   }
 
   // Water Log operations

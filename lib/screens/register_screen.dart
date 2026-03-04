@@ -87,11 +87,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _register,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6A5AE0),
+                    backgroundColor: const Color(0xFF4CAF50), // Changed to Green
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     elevation: 5,
-                    shadowColor: const Color(0xFF6A5AE0).withOpacity(0.4),
+                    shadowColor: const Color(0xFF4CAF50).withOpacity(0.4),
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
@@ -116,7 +116,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         controller: controller,
         obscureText: isPassword,
         decoration: InputDecoration(
-          icon: Icon(icon, color: const Color(0xFF6A5AE0)),
+          icon: Icon(icon, color: const Color(0xFF4CAF50)), // Changed to Green
           border: InputBorder.none,
           labelText: label,
           labelStyle: const TextStyle(color: Colors.grey),
